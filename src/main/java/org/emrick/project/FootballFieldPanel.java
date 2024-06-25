@@ -2,6 +2,7 @@ package org.emrick.project;
 
 import org.emrick.project.effect.Effect;
 import org.emrick.project.effect.EffectManager;
+import org.emrick.project.effect.RFTrigger;
 
 import javax.swing.*;
 import javax.swing.event.MouseInputListener;
@@ -9,7 +10,10 @@ import java.awt.*;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 
 public class FootballFieldPanel extends JPanel implements RepaintListener {
     public Drill drill;
@@ -34,19 +38,20 @@ public class FootballFieldPanel extends JPanel implements RepaintListener {
     public long currentMS = 0;
     private int currentCount = 0;
     private int currentSetStartCount = 0;
-    private SerialTransmitter serialTransmitter;
+    private boolean showLabels = false;
 
     // Effects utility
     private final FootballFieldListener footballFieldListener;
     private EffectManager effectManager;
     private int effectTransparency = 255;
     private boolean useFps;
+    private HashMap<Integer, RFTrigger> count2RFTrigger;
 
     public void setUseFps(boolean useFps) {
         this.useFps = useFps;
     }
 
-    public FootballFieldPanel(FootballFieldListener footballFieldListener) {
+    public FootballFieldPanel(FootballFieldListener footballFieldListener, HashMap<Integer, RFTrigger> count2RFTrigger) {
 //        setPreferredSize(new Dimension(fieldWidth + 2*margin, fieldHeight + 2*margin)); // Set preferred size for the drawing area
         setMinimumSize(new Dimension(1042, 548));
         drill = new Drill();
@@ -55,10 +60,11 @@ public class FootballFieldPanel extends JPanel implements RepaintListener {
         this.addMouseListener(new MouseInput(this));
         colorChosen = Color.BLACK;
         this.footballFieldListener = footballFieldListener;
+        this.count2RFTrigger = count2RFTrigger;
     }
 
     public FootballFieldPanel(Color colorChosen, FootballFieldListener footballFieldListener) {
-        this(footballFieldListener);
+        this.footballFieldListener = footballFieldListener;
         this.colorChosen = colorChosen;
     }
 
@@ -75,12 +81,17 @@ public class FootballFieldPanel extends JPanel implements RepaintListener {
         this.effectTransparency = effectTransparency;
     }
 
+    public HashMap<Integer, RFTrigger> getCount2RFTrigger() {
+        return count2RFTrigger;
+    }
+
+    public void setCount2RFTrigger(HashMap<Integer, RFTrigger> count2RFTrigger) {
+        this.count2RFTrigger = count2RFTrigger;
+    }
+
     public void addSetToField(Set set) {
         currentSet = set;
         if (!set.equals("0")) {
-            if (serialTransmitter != null) {
-                serialTransmitter.writeSet(set.index);
-            }
             for (Performer p : drill.performers) {
                 for (Coordinate c : p.getCoordinates()) {
                     if (c.set.equals(set)) {
@@ -95,14 +106,6 @@ public class FootballFieldPanel extends JPanel implements RepaintListener {
             }
         }
         repaint();
-    }
-
-    public SerialTransmitter getSerialTransmitter() {
-        return serialTransmitter;
-    }
-
-    public void setSerialTransmitter(SerialTransmitter serialTransmitter) {
-        this.serialTransmitter = serialTransmitter;
     }
 
     public int getCurrentCount() {
@@ -160,7 +163,7 @@ public class FootballFieldPanel extends JPanel implements RepaintListener {
             }
         }
         if (e.isTIME_GRADIENT()) {
-            if (e.getStartTimeMSec() + e.getDelay().toMillis() + e.getDuration().toMillis() > currMS) {
+            if (e.getStartTimeMSec() + e.getDelay().toMillis() + e.getDuration().toMillis() >= currMS) {
                 long startGradient = e.getStartTimeMSec() + e.getDelay().toMillis();
                 float shiftProgress = (float) (currMS - startGradient) / (float) e.getDuration().toMillis();
                 float[] hsvs = new float[3];
@@ -232,6 +235,23 @@ public class FootballFieldPanel extends JPanel implements RepaintListener {
         }
         // Case: User is not using FPS playback mode
         if (!useFps) currentSetRatio = 1;
+        if (count2RFTrigger != null) {
+            Iterator<RFTrigger> iterator = count2RFTrigger.values().iterator();
+            ArrayList<RFTrigger> triggers = new ArrayList<>();
+            while (iterator.hasNext()) {
+                triggers.add(iterator.next());
+            }
+            triggers.sort(Comparator.comparingInt(RFTrigger::getCount));
+            for (int i = 0; i < triggers.size(); i++) {
+                RFTrigger trigger = triggers.get(i);
+                long start = trigger.getTimestampMillis();
+                long nextFrameMS = start + (long) (1.0 / footballFieldListener.getFrameRate() * 1000);
+                if (currMS >= start && currMS < nextFrameMS) {
+                    footballFieldListener.onRFSignal(i);
+                    break;
+                }
+            }
+        }
 
         // Draw performers with their colors
         for (Performer p : drill.performers) {
@@ -287,6 +307,12 @@ public class FootballFieldPanel extends JPanel implements RepaintListener {
             g.drawRect((int)x-7,(int)y-7,14,14);
             g.drawRect((int)x-6,(int)y-6,12,12);
             g.drawLine((int)x,(int)y-5,(int)x,(int)y+6);
+
+            if (showLabels) {
+                g.setFont(new Font("TimesRoman", Font.BOLD, (int) Math.ceil(fieldWidth / 120)));
+                g.drawString(p.getIdentifier(), (int) x - 7, (int) y + 16);
+            }
+
         }
 
         if (selecting) {
@@ -325,6 +351,14 @@ public class FootballFieldPanel extends JPanel implements RepaintListener {
         frontSideline50 = new Point(x + (int)fieldWidth / 2,y + (int)fieldHeight);
 
         g.drawImage(image, x, y, width, height, this);
+    }
+
+    public boolean isShowLabels() {
+        return showLabels;
+    }
+
+    public void setShowLabels(boolean showLabels) {
+        this.showLabels = showLabels;
     }
 
     public void setFloorCoverImage(Image floorCoverImage) {

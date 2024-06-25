@@ -22,6 +22,7 @@ public class Effect implements Cloneable, TimelineEvent {
     private Duration duration;
     private Duration timeout;
     private double speed;
+    private double angle;
 
     // Bitflags
     private boolean TIME_GRADIENT;
@@ -30,7 +31,7 @@ public class Effect implements Cloneable, TimelineEvent {
     private boolean INSTANT_COLOR;
     private boolean upOrSide;
     private boolean direction;
-    private int effectType;
+    private EffectList effectType;
     private int id;
 
     public Effect(long startTimeMSec) {
@@ -47,7 +48,8 @@ public class Effect implements Cloneable, TimelineEvent {
         this.upOrSide = false;
         this.direction = false;
         this.speed = 1;
-        this.effectType = 0;
+        this.angle = 0;
+        this.effectType = EffectList.HIDE_GROUPS;
         this.id = -1;
         calculateEndTimeMSec();
     }
@@ -67,8 +69,9 @@ public class Effect implements Cloneable, TimelineEvent {
         this.upOrSide = false;
         this.direction = false;
         this.speed = 1;
+        this.angle = 0;
         this.startTimeMSec = startTimeMSec;
-        this.effectType = 0;
+        this.effectType = EffectList.HIDE_GROUPS;
         this.id = id;
         calculateEndTimeMSec();
     }
@@ -83,7 +86,25 @@ public class Effect implements Cloneable, TimelineEvent {
     }
 
     public GeneratedEffect getGeneratedEffect() {
+        if (generatedEffect == null && effectType != EffectList.HIDE_GROUPS) {
+            switch (effectType) {
+                case GENERATED_FADE: generatedEffect = GeneratedEffectLoader.generateFadeEffectFromEffect(this); break;
+                case STATIC_COLOR: generatedEffect = GeneratedEffectLoader.generateStaticColorEffectFromEffect(this); break;
+                case WAVE: generatedEffect = GeneratedEffectLoader.generateWaveEffectFromEffect(this); break;
+                case ALTERNATING_COLOR: generatedEffect = GeneratedEffectLoader.generateAlternatingColorEffectFromEffect(this); break;
+                case RIPPLE: generatedEffect = GeneratedEffectLoader.generateRippleEffectFromEffect(this); break;
+                case CIRCLE_CHASE: generatedEffect = GeneratedEffectLoader.generateCircleChaseEffectFromEffect(this); break;
+            }
+        }
         return generatedEffect;
+    }
+
+    public double getAngle() {
+        return angle;
+    }
+
+    public void setAngle(double angle) {
+        this.angle = angle;
     }
 
     public void setGeneratedEffect(GeneratedEffect generatedEffect) {
@@ -102,11 +123,11 @@ public class Effect implements Cloneable, TimelineEvent {
         this.id = id;
     }
 
-    public int getEffectType() {
+    public EffectList getEffectType() {
         return effectType;
     }
 
-    public void setEffectType(int effectType) {
+    public void setEffectType(EffectList effectType) {
         this.effectType = effectType;
     }
 
@@ -221,6 +242,17 @@ public class Effect implements Cloneable, TimelineEvent {
     }
 
     @Override
+    public String toString() {
+        return "Effect{" +
+                "startTimeMSec=" + startTimeMSec +
+                ", endTimeMSec=" + endTimeMSec +
+                ", delay=" + delay.toMillis() +
+                ", duration=" + duration.toMillis() +
+                ", id=" + id +
+                '}';
+    }
+
+    @Override
     public Effect clone() {
         try {
             // Color and Duration are immutable, so a shallow copy will work
@@ -253,12 +285,12 @@ public class Effect implements Cloneable, TimelineEvent {
 
         String timeLineLabel;
         switch(effectType) {
-            case 1 : timeLineLabel = "Fade"; break;
-            case 2 : timeLineLabel = "Static Color"; break;
-            case 3 : timeLineLabel = "Flashing Color"; break;
-            case 4 : timeLineLabel = "Ripple"; break;
-            case 5 : timeLineLabel = "Wave"; break;
-            case 6 : timeLineLabel = "Circle Chase"; break;
+            case GENERATED_FADE: timeLineLabel = "Fade"; break;
+            case STATIC_COLOR: timeLineLabel = "Static Color"; break;
+            case ALTERNATING_COLOR: timeLineLabel = "Alternating Color"; break;
+            case RIPPLE: timeLineLabel = "Ripple"; break;
+            case WAVE: timeLineLabel = "Wave"; break;
+            case CIRCLE_CHASE: timeLineLabel = "Circle Chase"; break;
             default : timeLineLabel = "Default Pattern"; break;
         }
 
@@ -272,7 +304,11 @@ public class Effect implements Cloneable, TimelineEvent {
 
         JPanel endColorPanel = new JPanel();
         endColorPanel.setPreferredSize(new Dimension(10, 10));
-        endColorPanel.setBackground(endColor);
+        if (effectType == EffectList.STATIC_COLOR) {
+            endColorPanel.setBackground(null);
+        } else {
+            endColorPanel.setBackground(endColor);
+        }
 
         widgetPanel.add(titleLabel);
         widgetPanel.add(startTimeLabel);
@@ -280,7 +316,7 @@ public class Effect implements Cloneable, TimelineEvent {
         widgetPanel.add(startColorPanel);
         widgetPanel.add(endColorPanel);
 
-        widgetPanel.setPreferredSize(new Dimension(100, 85));
+        widgetPanel.setPreferredSize(new Dimension(110, 85));
 
         return widgetPanel;
     }
