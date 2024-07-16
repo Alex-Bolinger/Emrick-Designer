@@ -1956,7 +1956,7 @@ public class MediaEditorGUI extends Component implements ImportListener, ScrubBa
                     currentEffect = circleChaseEffect.generateEffectObj();
                 }
             }
-            effectGUI = new EffectGUI(currentEffect, currentMSec, this, selectedEffectType);
+            effectGUI = new EffectGUI(currentEffect, currentMSec, this, selectedEffectType, effectManager);
             // Add updated data for effect view
             effectViewPanel.add(effectGUI.getEffectPanel(), BorderLayout.CENTER);
             effectViewPanel.revalidate();
